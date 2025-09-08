@@ -1,0 +1,36 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+
+############################## Server Basics #############################
+broker.id={{ kafka_broker_id }}
+
+############################# Socket Server Settings #############################
+listeners=PLAINTEXT://0.0.0.0:{{ kafka_port }}
+advertised.listeners=PLAINTEXT://{{ kafka_advertised_hostname }}:{{ kafka_port }}
+num.network.threads={{ num_network_threads }}
+num.io.threads={{ num_io_threads }}
+socket.send.buffer.bytes=102400
+socket.receive.buffer.bytes=102400
+socket.request.max.bytes=104857600
+
+############################# Log Basics #############################
+log.dirs={{ kafka_log_dir_linux }}
+num.partitions={{ num_partitions }}
+num.recovery.threads.per.data.dir=1
+
+############################# Internal Topic Settings #############################
+offsets.topic.replication.factor=3
+transaction.state.log.replication.factor=3
+transaction.state.log.min.isr=2
+
+############################# Log Retention Policy #############################
+log.retention.hours={{ log_retention_hours }}
+log.retention.check.interval.ms=300000
+
+############################# Zookeeper #############################
+zookeeper.connect={{ zookeeper_connect }}
+zookeeper.connection.timeout.ms={{ zookeeper_connection_timeout_ms }}
+
+############################# Group Coordinator Settings #############################
+group.initial.rebalance.delay.ms=0

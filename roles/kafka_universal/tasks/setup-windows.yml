@@ -1,0 +1,48 @@
+---
+# This requires Chocolatey to be installed on the Windows host
+- name: Install OpenJDK 11 on Windows
+  win_chocolatey:
+    name: openjdk11
+    state: present
+
+- name: Download Kafka for Windows
+  win_get_url:
+    url: "https://archive.apache.org/dist/kafka/{{ kafka_version }}/kafka_2.13-{{ kafka_version }}.tgz"
+    dest: "C:\\Windows\\Temp\\kafka.tgz"
+
+- name: Unarchive Kafka on Windows
+  win_unzip:
+    src: "C:\\Windows\\Temp\\kafka.tgz"
+    dest: "C:\\Windows\\Temp"
+
+- name: Move Kafka files to install directory
+  win_copy:
+    src: "C:\\Windows\\Temp\\kafka_2.13-{{ kafka_version }}\\"
+    dest: "{{ kafka_install_dir_windows }}"
+    remote_src: yes
+
+- name: Create Kafka log directory on Windows
+  win_file:
+    path: "{{ kafka_log_dir_windows }}"
+    state: directory
+
+- name: Update ZooKeeper properties for Windows
+  win_lineinfile:
+    path: "{{ kafka_install_dir_windows }}\\config\\zookeeper.properties"
+    regexp: "^dataDir=.*"
+    line: "dataDir={{ kafka_log_dir_windows }}\\zookeeper"
+
+- name: Update Kafka server properties for Windows
+  win_lineinfile:
+    path: "{{ kafka_install_dir_windows }}\\config\\server.properties"
+    regexp: "^log.dirs=.*"
+    line: "log.dirs={{ kafka_log_dir_windows }}\\kafka-logs"
+
+- name: Run ZooKeeper as a background process
+  win_command: 'powershell.exe -Command "Start-Process -FilePath C:\\Windows\\System32\\cmd.exe -ArgumentList \'/c, {{ kafka_install_dir_windows }}\\bin\\windows\\zookeeper-server-start.bat, {{ kafka_install_dir_windows }}\\config\\zookeeper.properties\' -WindowStyle Hidden"'
+
+- name: Run Kafka as a background process
+  win_command: 'powershell.exe -Command "Start-Process -FilePath C:\\Windows\\System32\\cmd.exe -ArgumentList \'/c, {{ kafka_install_dir_windows }}\\bin\\windows\\kafka-server-start.bat, {{ kafka_install_dir_windows }}\\config\\server.properties\' -WindowStyle Hidden"'
+  
+# Note: A robust Windows implementation would use NSSM to create proper services.
+# This example uses background processes for simplicity.

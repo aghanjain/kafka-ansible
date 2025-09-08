@@ -1,0 +1,36 @@
+---
+- name: Check if the selected Kafka version is defined in the compatibility matrix
+  ansible.builtin.fail:
+    msg: "Kafka version '{{ kafka_version }}' is not a valid selection or has no compatibility info defined."
+  when: kafka_version not in kafka_compatibility
+
+- name: Check if the target OS family is supported for the selected Kafka version
+  ansible.builtin.fail:
+    msg: "The OS family '{{ ansible_os_family }}' is not supported for Kafka version '{{ kafka_version }}'."
+  when: ansible_os_family not in kafka_compatibility[kafka_version] | map(attribute='family') | list
+
+- name: Determine if the specific OS version is compatible
+  ansible.builtin.set_fact:
+    is_compatible: >-
+      {% set supported_versions = kafka_compatibility[kafka_version] | selectattr('family', 'equalto', ansible_os_family) | map(attribute='versions') | first | default([]) %}
+      {% if ansible_os_family == 'RedHat' %}
+      {{ ansible_distribution_major_version in supported_versions }}
+      {% else %}
+      {{ (ansible_distribution_version | default('')) in supported_versions or (ansible_os_version | default('')) in supported_versions }}
+      {% endif %}
+      | bool
+
+- name: Fail if the OS version is not compatible
+  ansible.builtin.fail:
+    msg: "Compatibility check FAILED. Kafka '{{ kafka_version }}' is not supported on {{ ansible_distribution }} {{ ansible_distribution_version | default(ansible_os_version) }}."
+  when: not is_compatible
+
+#- name: Check if minimum number of Kafka brokers is defined
+#  ansible.builtin.fail:
+#    msg: "At least 3 Kafka brokers are required for a cluster setup."
+#  when: kafka_brokers | length < 3
+
+#- name: Check if minimum number of ZooKeeper nodes is defined
+#  ansible.builtin.fail:
+#    msg: "At least 3 ZooKeeper nodes are required for an ensemble."
+#  when: zookeeper_nodes | length < 3

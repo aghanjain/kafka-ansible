@@ -1,0 +1,42 @@
+# FILE: roles/kafka_universal/tasks/main.yml
+---
+- name: Run preflight compatibility checks
+  ansible.builtin.include_tasks: preflight.yml
+
+- name: Include tasks for Debian family
+  ansible.builtin.include_tasks: setup-debian.yml
+  when: ansible_os_family == "Debian"
+
+# Add other OS families here as needed in the future
+- name: Include tasks for RedHat family
+  ansible.builtin.include_tasks: setup-redhat.yml
+  when: ansible_os_family == "RedHat"
+
+#- name: Include tasks for SUSE family
+#  ansible.builtin.include_tasks: setup-suse.yml
+#  when: ansible_os_family == "Suse"
+
+# --- Infrastructure Creation (Disabled) ---
+# - name: Create GCP Compute Engine VMs for Kafka and ZooKeeper
+#   ansible.builtin.include_tasks: setup-gcp.yml
+
+# --- Configuration Tasks ---
+- name: Update ZooKeeper configuration file (zookeeper.properties)
+  ansible.builtin.template:
+    src: zookeeper.properties.j2
+    dest: "{{ kafka_install_dir_linux }}/config/zookeeper.properties"
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    mode: '0644'
+  notify: Restart ZooKeeper
+  when: inventory_hostname in groups['zookeeper_servers']
+
+- name: Update Kafka configuration file (server.properties)
+  ansible.builtin.template:
+    src: server.properties.j2
+    dest: "{{ kafka_install_dir_linux }}/config/server.properties"
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    mode: '0644'
+  notify: Restart Kafka
+  when: inventory_hostname in groups['kafka_servers']

@@ -1,0 +1,49 @@
+# FILE: kafka-cluster-playbook.yml
+---
+# PLAY 1: GATHER USER CHOICES
+- name: Gather Kafka Version and Target OS
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: "Load compatibility variables from the role"
+      ansible.builtin.include_vars:
+        file: roles/kafka_universal/vars/main.yml
+        name: kafka_vars
+
+    - name: "Display available options to the user"
+      ansible.builtin.debug:
+        msg:
+          - "================================================================"
+          - " Supported Kafka Versions: {{ kafka_vars.kafka_available_versions }}"
+          - "================================================================"
+
+    - name: "Prompt for Kafka Version"
+      ansible.builtin.pause:
+        prompt: "Enter the Kafka version you want to install"
+      register: kafka_version_prompt
+      until: kafka_version_prompt.user_input in kafka_vars.kafka_available_versions
+      retries: 3
+
+    - name: "Set facts for the deployment play"
+      ansible.builtin.set_fact:
+        chosen_kafka_version: "{{ kafka_version_prompt.user_input }}"
+        cacheable: yes
+
+# PLAY 2: DEPLOY KAFKA CLUSTER
+- name: Deploy Kafka and ZooKeeper Cluster
+  hosts: zookeeper_servers, kafka_servers
+  become: yes
+
+  pre_tasks:
+    - name: "Dynamically build the ZooKeeper connection string"
+      ansible.builtin.set_fact:
+        zookeeper_connect: "{{ groups['zookeeper_servers'] | map('extract', hostvars, 'inventory_hostname') | map('regex_replace', '$', ':' + zookeeper_port | string) | join(',') }}"
+      vars:
+        zookeeper_port: 2181 # Define the port here for clarity
+
+  roles:
+    - role: kafka_universal
+      vars:
+        kafka_version: "{{ hostvars['localhost']['chosen_kafka_version'] }}"

@@ -1,0 +1,123 @@
+---
+- name: Uninstall Kafka and ZooKeeper
+  hosts: all
+  become: yes
+  vars:
+    # --- These variables define the locations and names to be removed ---
+    kafka_install_dir: "/opt/kafka"
+    kafka_log_dir: "/var/log/kafka"
+    zookeeper_data_dir: "/var/lib/zookeeper"
+    kafka_user: "kafka"
+    kafka_group: "kafka"
+    # This variable is only used to clean up the temporary download file.
+    kafka_version: "3.7.0"
+
+  tasks:
+    # -------------------------------------------------------------------
+    # NEW - SAFETY CONFIRMATION PROMPT
+    # This task pauses the playbook and waits for you to press Enter.
+    # It gives you a final chance to abort if you targeted the wrong servers.
+    # -------------------------------------------------------------------
+    - name: Confirm uninstallation
+      ansible.builtin.pause:
+        prompt: |
+          WARNING: This will permanently delete Kafka, ZooKeeper, their data, and the 'kafka' user
+          from the host: {{ inventory_hostname }}.
+          Press ENTER to continue, or press CTRL+C and then 'A' to abort.
+
+    # Stops the Kafka service if it's running and disables it from starting on boot.
+    # 'ignore_errors: yes' prevents the playbook from failing if the service was already stopped or doesn't exist.
+    - name: Stop and disable Kafka service
+      ansible.builtin.systemd:
+        name: kafka
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    # Does the same as the previous task, but for the ZooKeeper service.
+    - name: Stop and disable ZooKeeper service
+      ansible.builtin.systemd:
+        name: zookeeper
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    # Deletes the systemd service file for Kafka.
+    # 'state: absent' means "ensure this file does not exist."
+    - name: Remove Kafka systemd service file
+      ansible.builtin.file:
+        path: "/etc/systemd/system/kafka.service"
+        state: absent
+
+    # Deletes the systemd service file for ZooKeeper.
+    - name: Remove ZooKeeper systemd service file
+      ansible.builtin.file:
+        path: "/etc/systemd/system/zookeeper.service"
+        state: absent
+
+    # Tells the systemd manager to reload its configuration from disk.
+    # This makes the OS aware that the Kafka and ZooKeeper services have been removed.
+    - name: Reload systemd to apply changes
+      ansible.builtin.systemd:
+        daemon_reload: yes
+
+    # Deletes the entire Kafka installation directory (e.g., /opt/kafka).
+    - name: Remove Kafka installation directory
+      ansible.builtin.file:
+        path: "{{ kafka_install_dir }}"
+        state: absent
+
+    # Deletes the directory where Kafka stored its logs.
+    - name: Remove Kafka log directory
+      ansible.builtin.file:
+        path: "{{ kafka_log_dir }}"
+        state: absent
+
+    # Deletes the directory where ZooKeeper stored its data.
+    - name: Remove ZooKeeper data directory
+      ansible.builtin.file:
+        path: "{{ zookeeper_data_dir }}"
+        state: absent
+        
+    # Cleans up the unarchived source files from the /tmp directory, if they exist.
+    - name: Remove temporary Kafka download files
+      ansible.builtin.file:
+        path: "/tmp/kafka_2.13-{{ kafka_version }}"
+        state: absent
+
+    # Deletes the dedicated 'kafka' user account.
+    # 'remove: yes' is important as it also deletes the user's home directory.
+    - name: Remove Kafka user and its home directory
+      ansible.builtin.user:
+        name: "{{ kafka_user }}"
+        state: absent
+        remove: yes
+
+    # Deletes the dedicated 'kafka' group.
+    - name: Remove Kafka group
+      ansible.builtin.group:
+        name: "{{ kafka_group }}"
+        state: absent
+
+# This is a separate play to handle the Java dependency.
+# It is optional and should be used with caution, as other apps might need Java.
+- name: (Optional) Uninstall Java Dependency
+  hosts: all
+  become: yes
+  vars:
+    java_package_redhat: "java-21-openjdk-headless"
+    java_package_debian: "openjdk-21-jre-headless"
+  tasks:
+    # Uninstalls the Java package, but only runs on RedHat family systems (like CentOS).
+    - name: Uninstall Java (RedHat/CentOS)
+      ansible.builtin.package:
+        name: "{{ java_package_redhat }}"
+        state: absent
+      when: ansible_os_family == "RedHat"
+
+    # Uninstalls the Java package, but only runs on Debian family systems (like Ubuntu).
+    - name: Uninstall Java (Debian/Ubuntu)
+      ansible.builtin.package:
+        name: "{{ java_package_debian }}"
+        state: absent
+      when: ansible_os_family == "Debian"

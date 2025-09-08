@@ -1,0 +1,11 @@
+---
+- name: Install dependencies for Debian family
+  ansible.builtin.apt:
+    name:
+      - openjdk-11-jre-headless
+      - acl
+    state: present
+    update_cache: yes
+
+- name: Include common Linux setup tasks
+  ansible.builtin.include_tasks: setup-linux.yml

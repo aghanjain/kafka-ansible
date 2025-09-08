@@ -1,0 +1,140 @@
+---
+- name: Create GCP VPC network
+  google.cloud.gcp_compute_network:
+    name: "{{ gcp_network }}"
+    project: "{{ gcp_project_id }}"
+    state: present
+  register: vpc_network
+  when: false  # Skip for existing VMs
+
+- name: Create GCP subnetwork
+  google.cloud.gcp_compute_subnetwork:
+    name: "{{ gcp_subnetwork }}"
+    region: "{{ gcp_region }}"
+    network: "{{ vpc_network.name }}"
+    ip_cidr_range: 10.0.0.0/24
+    project: "{{ gcp_project_id }}"
+    state: present
+  when: false  # Skip for existing VMs
+
+- name: Create firewall rules for Kafka and ZooKeeper
+  google.cloud.gcp_compute_firewall:
+    name: allow-kafka-zookeeper
+    network: "{{ gcp_network }}"
+    allowed:
+      - ip_protocol: tcp
+        ports:
+          - "{{ kafka_port }}"
+          - "{{ zookeeper_port }}"
+          - "{{ zookeeper_server_port }}"
+          - "{{ zookeeper_leader_election_port }}"
+    source_tags:
+      - kafka
+      - zookeeper
+    target_tags:
+      - kafka
+      - zookeeper
+    project: "{{ gcp_project_id }}"
+    state: present
+
+- name: Create firewall rule for SSH access from control node
+  google.cloud.gcp_compute_firewall:
+    name: allow-ssh
+    network: "{{ gcp_network }}"
+    allowed:
+      - ip_protocol: tcp
+        ports:
+          - 22
+    source_ranges:
+      - 10.0.0.20/32  # Allow SSH from control node
+    target_tags:
+      - kafka
+      - zookeeper
+      - kafka-client
+    project: "{{ gcp_project_id }}"
+    state: present
+
+- name: Create Kafka broker VMs
+  google.cloud.gcp_compute_instance:
+    name: "kafka-broker-{{ item }}"
+    machine_type: "{{ gcp_machine_type }}"
+    zone: "{{ gcp_zones[item | int % gcp_zones | length] }}"
+    disks:
+      - auto_delete: true
+        boot: true
+        initialize_params:
+          source_image: projects/ubuntu-os-cloud/global/images/ubuntu-2204-jammy-v20250801
+          disk_size_gb: "{{ gcp_disk_size }}"
+    network_interfaces:
+      - network: "{{ gcp_network }}"
+        subnetwork: "{{ gcp_subnetwork }}"
+    tags:
+      items:
+        - kafka
+    project: "{{ gcp_project_id }}"
+    state: present
+  loop: "{{ range(0, kafka_brokers | length) | list }}"
+  when: false  # Skip for existing VMs
+
+- name: Create ZooKeeper VMs
+  google.cloud.gcp_compute_instance:
+    name: "zookeeper-node-{{ item }}"
+    machine_type: "{{ gcp_machine_type }}"
+    zone: "{{ gcp_zones[item | int % gcp_zones | length] }}"
+    disks:
+      - auto_delete: true
+        boot: true
+        initialize_params:
+          source_image: projects/ubuntu-os-cloud/global/images/ubuntu-2204-jammy-v20250801
+          disk_size_gb: "{{ gcp_disk_size }}"
+    network_interfaces:
+      - network: "{{ gcp_network }}"
+        subnetwork: "{{ gcp_subnetwork }}"
+    tags:
+      items:
+        - zookeeper
+    project: "{{ gcp_project_id }}"
+    state: present
+  loop: "{{ range(0, zookeeper_nodes | length) | list }}"
+  when: false  # Skip for existing VMs
+
+- name: Create Kafka client VM
+  google.cloud.gcp_compute_instance:
+    name: kafka-client
+    machine_type: e2-small
+    zone: "{{ gcp_zones[0] }}"
+    disks:
+      - auto_delete: true
+        boot: true
+        initialize_params:
+          source_image: projects/ubuntu-os-cloud/global/images/ubuntu-2204-jammy-v20250801
+          disk_size_gb: 30
+    network_interfaces:
+      - network: "{{ gcp_network }}"
+        subnetwork: "{{ gcp_subnetwork }}"
+    tags:
+      items:
+        - kafka-client
+    project: "{{ gcp_project_id }}"
+    state: present
+  when: false  # Skip for existing VMs
+
+- name: Grant IAP access to client VM
+  google.cloud.gcp_compute_instance_iam_binding:
+    name: kafka-client
+    zone: "{{ gcp_zones[0] }}"
+    role: roles/compute.instanceAdmin.v1
+    members:
+      - user:{{ gcp_iap_user }}
+    project: "{{ gcp_project_id }}"
+    state: present
+  when: false  # Skip for existing VMs
+
+- name: Grant IAP tunnel access
+  google.cloud.gcp_iam_role_binding:
+    role: roles/iap.tunnelResourceAccessor
+    members:
+      - user:{{ gcp_iap_user }}
+    project: "{{ gcp_project_id }}"
+    state: present
+  when: false  # Skip for existing VMs

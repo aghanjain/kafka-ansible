@@ -1,0 +1,12 @@
+---
+- name: Install dependencies for RedHat family
+  # Use the generic 'package' module. It's idempotent and will automatically
+  # use 'dnf' or 'yum' on CentOS/RHEL systems.
+  ansible.builtin.package:
+    name:
+      - java-21-openjdk-headless
+      - acl
+    state: present
+
+- name: Include common Linux setup tasks
+  ansible.builtin.include_tasks: setup-linux.yml

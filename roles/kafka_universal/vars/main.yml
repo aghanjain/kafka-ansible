@@ -1,0 +1,38 @@
+# FILE: roles/kafka_universal/vars/main.yml
+---
+kafka_available_versions:
+  - "3.7.0"
+  - "3.6.2"
+
+kafka_compatibility:
+  "3.7.0":
+    - { family: "Debian", versions: ["24.04", "22.04"] }
+    - { family: "RedHat", versions: ["9", "8"] }
+    - { family: "Suse", versions: ["15.5", "15.4"] }
+    - { family: "Centos", version: ["9", "10"] }
+  "3.6.2":
+    - { family: "Debian", versions: ["24.04", "22.04", "20.04"] }
+    - { family: "RedHat", versions: ["8", "7"] }
+    - { family: "Suse", versions: ["15.4"] }
+    - { family: "Centos", version: ["9", "10"] }
+
+# Kafka and ZooKeeper defaults
+kafka_user: kafka
+kafka_group: kafka
+kafka_install_dir_linux: /opt/kafka
+kafka_log_dir_linux: /var/log/kafka
+zookeeper_data_dir_linux: /var/lib/zookeeper
+kafka_port: 9092
+zookeeper_port: 2181
+zookeeper_server_port: 2888
+zookeeper_leader_election_port: 3888
+
+# --- DYNAMIC CLUSTER CONFIGURATION ---
+# This automatically builds the Zookeeper connection string from your inventory
+#zookeeper_connect: "{{ groups['zookeeper_servers'] | map('extract', hostvars, 'inventory_hostname') | map('regex_replace', '$', ':' + zookeeper_port | string) | join(',') }}"
+
+# Kafka cluster defaults
+num_partitions: 3
+offsets_topic_replication_factor: 3
+transaction_state_log_replication_factor: 3
+transaction_state_log_min_isr: 2

@@ -1,0 +1,103 @@
+---
+# This file contains tasks common to all Linux distributions
+
+- name: Create Kafka group
+  ansible.builtin.group:
+    name: "{{ kafka_group }}"
+    state: present
+
+- name: Create Kafka user
+  ansible.builtin.user:
+    name: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    home: "{{ kafka_install_dir_linux }}"
+    shell: /bin/false
+    state: present
+
+- name: Download and unarchive Kafka directly to install directory
+  ansible.builtin.unarchive:
+    src: "https://archive.apache.org/dist/kafka/{{ kafka_version }}/kafka_2.13-{{ kafka_version }}.tgz"
+    dest: "{{ kafka_install_dir_linux }}"
+    remote_src: yes
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    extra_opts: [--strip-components=1]
+    creates: "{{ kafka_install_dir_linux }}/bin"
+
+- name: Find Kafka scripts to make executable
+  ansible.builtin.find:
+    paths: "/opt/kafka/bin"
+    patterns: "*.sh"
+  register: kafka_scripts
+
+- name: Make Kafka scripts executable
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    mode: '0755'
+  loop: "{{ kafka_scripts.files }}"
+
+- name: Create Kafka log directory
+  ansible.builtin.file:
+    path: "{{ kafka_log_dir_linux }}"
+    state: directory
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    mode: '0755'
+
+- name: Create ZooKeeper data directory
+  ansible.builtin.file:
+    path: "{{ zookeeper_data_dir_linux }}"
+    state: directory
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    mode: '0755'
+
+- name: Create ZooKeeper myid file
+  ansible.builtin.template:
+    src: myid.j2
+    dest: "{{ zookeeper_data_dir_linux }}/myid"
+    owner: "{{ kafka_user }}"
+    group: "{{ kafka_group }}"
+    mode: '0644'
+  when: inventory_hostname in groups['zookeeper_servers']
+
+- name: Create ZooKeeper systemd service file
+  ansible.builtin.template:
+    src: zookeeper.service.j2
+    dest: /etc/systemd/system/zookeeper.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload systemd
+  when: inventory_hostname in groups['zookeeper_servers']
+
+- name: Create Kafka systemd service file
+  ansible.builtin.template:
+    src: kafka.service.j2
+    dest: /etc/systemd/system/kafka.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload systemd
+  when: inventory_hostname in groups['kafka_servers']
+
+# -------------------------------------------------------------------
+# This is the crucial fix: It forces systemd to reload NOW.
+# -------------------------------------------------------------------
+- name: Force all notified handlers to run immediately
+  meta: flush_handlers
+# -------------------------------------------------------------------
+
+- name: Ensure ZooKeeper service is started and enabled
+  ansible.builtin.systemd:
+    name: zookeeper
+    state: restarted
+    enabled: yes
+  when: inventory_hostname in groups['zookeeper_servers']
+
+- name: Ensure Kafka service is started and enabled
+  ansible.builtin.systemd:
+    name: kafka
+    state: restarted
+    enabled: yes
+  when: inventory_hostname in groups['kafka_servers']

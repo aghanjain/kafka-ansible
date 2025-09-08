@@ -1,0 +1,9 @@
+---
+- name: Install dependencies for SUSE family
+  ansible.builtin.zypper:
+    name:
+      - java-11-openjdk
+    state: present
+
+- name: Include common Linux setup tasks
+  ansible.builtin.include_tasks: setup-linux.yml

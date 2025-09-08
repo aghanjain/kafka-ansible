@@ -1,0 +1,9 @@
+dataDir={{ zookeeper_data_dir_linux }}
+clientPort={{ zookeeper_port }}
+tickTime=2000
+initLimit=10
+syncLimit=5
+# Dynamically list all servers in the ensemble from the inventory
+{% for host in groups['zookeeper_servers'] %}
+server.{{ hostvars[host]['zookeeper_myid'] }}={{ host }}:{{ zookeeper_server_port }}:{{ zookeeper_leader_election_port }}
+{% endfor %}
