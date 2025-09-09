@@ -68,7 +68,7 @@ Execute the main playbook to start the deployment. If you have an interactive pl
 
 Bash
 
-ansible-playbook kafka-playbook.yml -i inventory.yml
+ansible-playbook -i inventory.yml kafka-playbook.yml
 How It Works: The Automation Workflow
 The deployment is handled by the kafka_universal role, which follows a logical sequence of tasks:
 
